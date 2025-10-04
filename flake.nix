@@ -76,11 +76,11 @@
           # bzip2
         ];
 
-        cargoArtifacts = craneLib.buildDepsOnly ({
+        cargoArtifacts = craneLib.buildDepsOnly {
           src = craneLib.cleanCargoSource (craneLib.path ./.);
           inherit buildInputs nativeBuildInputs;
           pname = "ytdlp-gui";
-        });
+        };
       in with pkgs; {
         packages = rec {
           ytdlp-gui = craneLib.buildPackage {
@@ -98,8 +98,7 @@
               patchelf --set-rpath ${libPath} $out/bin/ytdlp-gui
 
               wrapProgram $out/bin/ytdlp-gui \
-                --prefix PATH : ${lib.makeBinPath [ pkgs.zenity pkgs.libsForQt5.kdialog]}\
-                --set LD_LIBRARY_PATH "${pkgs.libxkbcommon}/lib:${pkgs.libGL}/lib:${pkgs.wayland}/lib"
+                --set LD_LIBRARY_PATH "${pkgs.libxkbcommon}/lib:${pkgs.libGL}/lib:${pkgs.wayland}/lib:{pkgs.vulkan-loader}/lib"
             '';
 
             GIT_HASH = self.rev or self.dirtyRev;
@@ -116,12 +115,10 @@
               extensions = [ "rust-src" "rust-analyzer" ];
             })
             cargo-watch
-            zenity
-            kdePackages.kdialog
             yt-dlp
             cargo-i18n
           ];
-          LD_LIBRARY_PATH = "${lib.makeLibraryPath buildInputs}";
+          LD_LIBRARY_PATH = "${libPath}";
           XDG_DATA_DIRS="${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}:${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}:$XDG_DATA_DIRS";
         };
       }) // {
