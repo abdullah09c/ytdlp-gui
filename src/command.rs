@@ -57,7 +57,7 @@ impl Command {
 
     pub fn start(
         &mut self,
-        mut args: Vec<&str>,
+        mut args: Vec<String>,
         bin_path: Option<PathBuf>,
         sender: UnboundedSender<crate::Message>,
         videos_num: usize,
@@ -74,13 +74,13 @@ impl Command {
             command.creation_flags(CREATE_NO_WINDOW);
         }
 
-        let print = [
-            "--print",
-            r#"before_dl:__{"type": "pre_download", "video_id": "%(id)s"}"#,
-            "--print",
-            r#"playlist:__{"type": "end_of_playlist"}"#,
-            "--print",
-            r#"after_video:__{"type": "end_of_video"}"#,
+        let print = vec![
+            "--print".to_string(),
+            r#"before_dl:__{"type": "pre_download", "video_id": "%(id)s"}"#.to_string(),
+            "--print".to_string(),
+            r#"playlist:__{"type": "end_of_playlist"}"#.to_string(),
+            "--print".to_string(),
+            r#"after_video:__{"type": "end_of_video"}"#.to_string(),
         ];
 
         // reference: https://github.com/yt-dlp/yt-dlp/blob/351dc0bc334c4e1b5f00c152818c3ec0ed71f788/yt_dlp/YoutubeDL.py#L364
@@ -100,17 +100,17 @@ impl Command {
             r#""playlist_index": %(info.playlist_index)s }"#
         );
 
-        let progess_template = [
-            "--progress-template",
-            template,
+        let progess_template = vec![
+            "--progress-template".to_string(),
+            template.to_string(),
             // "--progress-template",
             // r#"postprocess:__{"type": "post_processing", "status": "%(progress.status)s"}"#,
         ];
 
-        args.extend_from_slice(&print);
-        args.extend_from_slice(&progess_template);
+        args.extend(print);
+        args.extend(progess_template);
 
-        args.push("--no-quiet");
+        args.push("--no-quiet".to_string());
 
         let Ok(shared_child) = SharedChild::spawn(
             command

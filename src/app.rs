@@ -97,6 +97,54 @@ impl YtGUI {
             Message::InputPlaylistItems(items) => {
                 self.config.options.playlist_items = items;
             }
+            Message::BrowsePlaylist => {
+                if !self.download_link.trim().is_empty() && self.is_playlist {
+                    self.browsing_playlist = true;
+                    let url = self.download_link.clone();
+                    let bin_path = self.config.bin_path.clone();
+                    return iced::Task::perform(
+                        fetch_playlist_videos(url, bin_path),
+                        Message::PlaylistVideosFetched,
+                    );
+                }
+            }
+            Message::PlaylistVideosFetched(result) => {
+                match result {
+                    Ok(videos) => {
+                        self.playlist_videos = videos;
+                        self.selected_video_indices.clear();
+                    }
+                    Err(e) => {
+                        self.download_message = Some(Err(DownloadError::Other));
+                        tracing::error!("Failed to fetch playlist videos: {e}");
+                        self.browsing_playlist = false;
+                    }
+                }
+            }
+            Message::TogglePlaylistVideo(index) => {
+                if self.selected_video_indices.contains(&index) {
+                    self.selected_video_indices.remove(&index);
+                } else {
+                    self.selected_video_indices.insert(index);
+                }
+            }
+            Message::SelectAllPlaylistVideos => {
+                self.selected_video_indices = (1..=self.playlist_videos.len()).collect();
+            }
+            Message::DeselectAllPlaylistVideos => {
+                self.selected_video_indices.clear();
+            }
+            Message::ExitPlaylistBrowser => {
+                self.browsing_playlist = false;
+                self.playlist_videos.clear();
+                self.selected_video_indices.clear();
+            }
+            Message::ExitPlaylistBrowserForDownload => {
+                // Exit playlist browser but keep the selected_video_indices
+                // so they can be used when user clicks Download after adjusting settings
+                self.browsing_playlist = false;
+                self.playlist_videos.clear();
+            }
             Message::ProgressEvent(progress) => self.handle_progress_event(&progress),
             Message::IcedEvent(event) => {
                 if let Event::Window(window_event) = event {
@@ -145,7 +193,7 @@ impl YtGUI {
                     return iced::Task::none();
                 }
 
-                let mut args: Vec<&str> = Vec::new();
+                let mut args: Vec<String> = Vec::new();
 
                 let mut links_num = 0;
 
@@ -166,24 +214,24 @@ impl YtGUI {
                         return iced::Task::none();
                     }
 
-                    args.push(link);
+                    args.push(link.to_string());
 
                     links_num = i + 1;
                 }
 
                 match self.download_type {
                     DownloadType::Video => {
-                        args.push("-S");
+                        args.push("-S".to_string());
 
-                        args.push(self.config.options.video_resolution.options());
+                        args.push(self.config.options.video_resolution.options().to_string());
 
                         // after downloading a video with a specific format
                         // yt-dlp sometimes downloads the audio and video seprately
                         // then merge them in a different format
                         // this enforces the chosen format by the user
-                        args.push("--remux-video");
+                        args.push("--remux-video".to_string());
 
-                        args.push(self.config.options.video_format.options());
+                        args.push(self.config.options.video_format.options().to_string());
 
                         tracing::debug!("{args:#?}");
                     }
@@ -191,41 +239,52 @@ impl YtGUI {
                         // Audio tab
 
                         // Extract audio from Youtube video
-                        args.push("-x");
+                        args.push("-x".to_string());
 
-                        args.push("--audio-format");
-                        args.push(self.config.options.audio_format.options());
+                        args.push("--audio-format".to_string());
+                        args.push(self.config.options.audio_format.options().to_string());
 
-                        args.push("--audio-quality");
-                        args.push(self.config.options.audio_quality.options());
+                        args.push("--audio-quality".to_string());
+                        args.push(self.config.options.audio_quality.options().to_string());
                     }
                 }
 
                 if let Some(cookies_file) = &self.config.cookies_file {
-                    args.push("--cookies");
-                    args.push(cookies_file.to_str().unwrap());
+                    args.push("--cookies".to_string());
+                    args.push(cookies_file.to_str().unwrap().to_string());
                 }
 
                 if self.is_playlist {
-                    let items = self.config.options.playlist_items.trim();
-                    if !items.is_empty() {
-                        args.push("-I");
-                        args.push(items);
+                    // Use selected videos from browser if available, otherwise fall back to manual input
+                    let playlist_items_str = if !self.selected_video_indices.is_empty() {
+                        let mut indices: Vec<_> = self.selected_video_indices.iter().copied().collect();
+                        indices.sort();
+                        indices.iter()
+                            .map(|i| i.to_string())
+                            .collect::<Vec<_>>()
+                            .join(",")
+                    } else {
+                        self.config.options.playlist_items.trim().to_string()
+                    };
+                    
+                    if !playlist_items_str.is_empty() {
+                        args.push("-I".to_string());
+                        args.push(playlist_items_str);
                     }
                 }
 
                 let playlist_options =
                     playlist_options(self.is_playlist, self.config.download_folder.clone());
 
-                args.append(&mut playlist_options.iter().map(|s| &**s).collect());
+                args.append(&mut playlist_options.into_iter().collect());
 
                 if let Some(sponsorblock) = &self.sponsorblock {
                     match sponsorblock {
                         SponsorBlockOption::Remove => {
-                            args.push("--sponsorblock-remove=default");
+                            args.push("--sponsorblock-remove=default".to_string());
                         }
                         SponsorBlockOption::Mark => {
-                            args.push("--sponsorblock-mark=default");
+                            args.push("--sponsorblock-mark=default".to_string());
                         }
                     }
                 }
@@ -236,6 +295,13 @@ impl YtGUI {
                     self.sender.clone(),
                     links_num,
                 );
+                
+                // Exit playlist browser after starting download
+                if self.browsing_playlist {
+                    self.browsing_playlist = false;
+                    self.playlist_videos.clear();
+                    self.selected_video_indices.clear();
+                }
             }
             Message::StopDownload => {
                 self.command.kill();
@@ -293,6 +359,10 @@ impl YtGUI {
     }
 
     pub fn view(&self) -> iced::Element<Message> {
+        if self.browsing_playlist {
+            return self.playlist_browser_view();
+        }
+
         let content: iced::Element<Message> = column![
             row![text_input(&fl!("download_link"), &self.download_link)
                 .on_input(Message::InputChanged)
@@ -325,7 +395,12 @@ impl YtGUI {
                     "Leave empty for all",
                     &self.config.options.playlist_items
                 )
-                .on_input(Message::InputPlaylistItems)
+                .on_input(Message::InputPlaylistItems),
+                if self.is_playlist {
+                    button(text("Browse Playlist")).on_press(Message::BrowsePlaylist)
+                } else {
+                    button(text("Browse Playlist"))
+                }
             ]
             .spacing(SPACING)
             .align_y(iced::Alignment::Center),
@@ -495,5 +570,109 @@ impl YtGUI {
             }
             None => {}
         }
+    }
+}
+
+async fn fetch_playlist_videos(
+    url: String,
+    bin_path: Option<PathBuf>,
+) -> Result<Vec<crate::playlist::PlaylistVideo>, String> {
+    use std::process::Command;
+
+    let mut cmd = Command::new(bin_path.unwrap_or("yt-dlp".into()));
+    cmd.arg("--dump-json")
+        .arg("--flat-playlist")
+        .arg("--no-warnings")
+        .arg(&url);
+
+    let output = cmd.output().map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        let error = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Failed to fetch playlist: {}", error));
+    }
+
+    let stdout = String::from_utf8(output.stdout).map_err(|e| e.to_string())?;
+    let mut videos = Vec::new();
+    let mut index = 1;
+
+    for line in stdout.lines() {
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(line) {
+            if let (Some(id), Some(title)) = (json.get("id").and_then(|v| v.as_str()), json.get("title").and_then(|v| v.as_str())) {
+                let duration = json.get("duration").and_then(|v| v.as_u64());
+                videos.push(crate::playlist::PlaylistVideo {
+                    index,
+                    title: title.to_string(),
+                    video_id: id.to_string(),
+                    duration,
+                });
+                index += 1;
+            }
+        }
+    }
+
+    Ok(videos)
+}
+
+impl YtGUI {
+    fn playlist_browser_view(&self) -> iced::Element<Message> {
+        use iced::widget::{scrollable, horizontal_space};
+
+        let video_list: iced::Element<Message> = if self.playlist_videos.is_empty() {
+            column![text("Loading playlist videos...")]
+                .spacing(10)
+                .padding(20)
+                .into()
+        } else {
+            let videos: Vec<_> = self.playlist_videos.iter().map(|video| {
+                let is_selected = self.selected_video_indices.contains(&video.index);
+                row![
+                    checkbox("", is_selected).on_toggle(move |_| Message::TogglePlaylistVideo(video.index)),
+                    text(video.to_string()).size(FONT_SIZE),
+                ]
+                .spacing(SPACING)
+                .align_y(iced::Alignment::Center)
+                .padding(5)
+                .into()
+            }).collect();
+
+            scrollable(
+                column(videos)
+                    .spacing(5)
+                    .padding(10)
+            )
+            .height(Length::FillPortion(1))
+            .into()
+        };
+
+        let content = column![
+            row![
+                text(format!("Playlist Videos ({} total)", self.playlist_videos.len())).size(20),
+                horizontal_space(),
+                button(text("Select All")).on_press(Message::SelectAllPlaylistVideos),
+                button(text("Clear All")).on_press(Message::DeselectAllPlaylistVideos),
+            ]
+            .spacing(SPACING)
+            .align_y(iced::Alignment::Center)
+            .padding(10),
+            video_list,
+            row![
+                button(text("Cancel")).on_press(Message::ExitPlaylistBrowser),
+                horizontal_space(),
+                text(format!("Selected: {}", self.selected_video_indices.len())).size(16),
+                button(text("Download Selected")).on_press(Message::ExitPlaylistBrowserForDownload),
+            ]
+            .spacing(SPACING)
+            .align_y(iced::Alignment::Center)
+            .padding(10),
+        ]
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .spacing(10);
+
+        container(content)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into()
     }
 }

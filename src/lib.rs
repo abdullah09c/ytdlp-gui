@@ -24,6 +24,7 @@ pub mod media_options;
 pub mod progress;
 mod sponsorblock;
 pub mod theme;
+pub mod playlist;
 
 use sponsorblock::SponsorBlockOption;
 use tracing::metadata::LevelFilter;
@@ -36,6 +37,7 @@ use tracing_subscriber::EnvFilter;
 
 use crate::media_options::Options;
 use crate::media_options::{AudioFormat, AudioQuality, VideoFormat, VideoResolution};
+use crate::playlist::PlaylistVideo;
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -47,6 +49,13 @@ pub enum Message {
     SelectedAudioFormat(AudioFormat),
     SelectedAudioQuality(AudioQuality),
     InputPlaylistItems(String),
+    BrowsePlaylist,
+    PlaylistVideosFetched(Result<Vec<PlaylistVideo>, String>),
+    TogglePlaylistVideo(usize),
+    SelectAllPlaylistVideos,
+    DeselectAllPlaylistVideos,
+    ExitPlaylistBrowser,
+    ExitPlaylistBrowserForDownload,
     SelectDownloadFolder,
     SelectedDownloadFolder(Option<PathBuf>),
     DownloadFolderTextInput(String),
@@ -154,6 +163,10 @@ pub struct YtGUI {
     is_file_dialog_open: bool,
     download_text_input_id: iced::widget::text_input::Id,
 
+    browsing_playlist: bool,
+    playlist_videos: Vec<PlaylistVideo>,
+    selected_video_indices: std::collections::HashSet<usize>,
+
     sender: UnboundedSender<Message>,
     command: command::Command,
     progress: Option<f32>,
@@ -180,6 +193,10 @@ impl YtGUI {
             playlist_progress: None,
             download_message: Default::default(),
             download_text_input_id: iced::widget::text_input::Id::unique(),
+
+            browsing_playlist: false,
+            playlist_videos: Vec::new(),
+            selected_video_indices: std::collections::HashSet::new(),
 
             sender: progress_sender,
             command: command::Command::default(),
