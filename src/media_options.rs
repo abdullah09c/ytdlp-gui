@@ -10,12 +10,14 @@ use crate::{
     Message,
 };
 
-#[derive(Deserialize, Serialize, Debug, Default, Copy, Clone)]
+#[derive(Deserialize, Serialize, Debug, Default, Clone)]
 pub struct Options {
     pub video_resolution: VideoResolution,
     pub video_format: VideoFormat,
     pub audio_quality: AudioQuality,
     pub audio_format: AudioFormat,
+    #[serde(default)]
+    pub playlist_items: String,
 }
 
 #[derive(Deserialize, Serialize, Default, Debug, Copy, Clone, PartialEq, Eq)]

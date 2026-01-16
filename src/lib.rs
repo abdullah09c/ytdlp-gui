@@ -46,6 +46,7 @@ pub enum Message {
     SelectedResolution(VideoResolution),
     SelectedAudioFormat(AudioFormat),
     SelectedAudioQuality(AudioQuality),
+    InputPlaylistItems(String),
     SelectDownloadFolder,
     SelectedDownloadFolder(Option<PathBuf>),
     DownloadFolderTextInput(String),

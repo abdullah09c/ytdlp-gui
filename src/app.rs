@@ -94,6 +94,9 @@ impl YtGUI {
             Message::SelectedAudioQuality(quality) => {
                 self.config.options.audio_quality = quality;
             }
+            Message::InputPlaylistItems(items) => {
+                self.config.options.playlist_items = items;
+            }
             Message::ProgressEvent(progress) => self.handle_progress_event(&progress),
             Message::IcedEvent(event) => {
                 if let Event::Window(window_event) = event {
@@ -203,6 +206,14 @@ impl YtGUI {
                     args.push(cookies_file.to_str().unwrap());
                 }
 
+                if self.is_playlist {
+                    let items = self.config.options.playlist_items.trim();
+                    if !items.is_empty() {
+                        args.push("-I");
+                        args.push(items);
+                    }
+                }
+
                 let playlist_options =
                     playlist_options(self.is_playlist, self.config.download_folder.clone());
 
@@ -307,6 +318,16 @@ impl YtGUI {
                 checkbox("Playlist", self.is_playlist).on_toggle(Message::TogglePlaylist),
             ]
             .spacing(7)
+            .align_y(iced::Alignment::Center),
+            row![
+                text("Playlist items (e.g. 1-3,5):").size(FONT_SIZE),
+                text_input(
+                    "Leave empty for all",
+                    &self.config.options.playlist_items
+                )
+                .on_input(Message::InputPlaylistItems)
+            ]
+            .spacing(SPACING)
             .align_y(iced::Alignment::Center),
             Tabs::new(Message::SelectTab)
                 .push(
