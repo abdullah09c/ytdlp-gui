@@ -1,5 +1,22 @@
 # Changelog
 
+## 3.2.0
+- Major: Interactive playlist browser with video selection
+- Major: Enhanced download workflow - select videos from playlist, then choose format/quality before download
+- Feature: Individual video checkboxes for precise playlist selection
+- Feature: "Select All" and "Clear All" buttons for bulk operations
+- Feature: Real-time selected video counter
+- Feature: Async playlist fetching using yt-dlp for smooth UI responsiveness
+- Feature: Persistent video selection when returning to settings
+- Bugfix: Fixed playlist item selection not being passed to yt-dlp correctly
+- Bugfix: Fixed lifetime issues in argument handling by using owned Strings
+- Bugfix: Fixed UI layout so action buttons remain visible during scrolling
+- Minor: Updated version to 3.2.0
+- Minor: Updated maintainer information to Abdullah Al Fuwad
+- Dev: New playlist.rs module for dedicated playlist management
+- Dev: Enhanced state management with proper playlist tracking
+- Build: Debian package (amd64) now available for easy installation
+
 ## 3.1.2
 - Minor: change missleading text in download path text input
 - Minor: use proper config defaults when config file is not present
